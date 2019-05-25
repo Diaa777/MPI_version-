@@ -187,9 +187,12 @@ int initfilestore(ImagenData img, FILE **fp, char* nombre, long *position){
 
 // Writing the image partition to the resulting file. dim is the exact size to write. offset is the displacement for avoid halos.
 int savingChunk(ImagenData img, FILE **fp, int dim, int offset){
+    printf("saving chunk with dim : %d \n", dim);
     int i,k=0;
     //Writing image partition
     for(i=offset;i<dim+offset;i++){
+        // printf("%d  ", i);
+        // if ((i+1)%20==0) printf("\n");
         fprintf(*fp,"%d %d %d ",img->R[i],img->G[i],img->B[i]);
 //        if ((i+1)%6==0) fprintf(*fp,"\n");
         k++;
@@ -326,7 +329,6 @@ int main(int argc, char **argv)
         return -1;
     }
     
-
 */
 	
 	
@@ -502,7 +504,7 @@ int main(int argc, char **argv)
         //DEBUG 
 //        printf("\nRound = %d, position = %ld, partsize= %d, chunksize=%d pixels\n", c, position, partsize, chunksize);
         
-        if (readImage(source, &fpsrc, chunksize1, halo/2, &position)) {
+        if (readImage(source, &fpsrc, chunksize, halo/2, &position)) {
             return -1;
         }
         gettimeofday(&tim, NULL);
@@ -537,15 +539,15 @@ int main(int argc, char **argv)
         BufferB=BufferB+chunksize1;
 	
 	for ( i; i<nproc; i++){
-	MPI_Send(BufferR, chunksize1, MPI_INT, i, tagm, MPI_COMM_WORLD);
-	MPI_Send(BufferG, chunksize1, MPI_INT, i, tagm, MPI_COMM_WORLD);
-	MPI_Send(BufferB, chunksize1, MPI_INT, i, tagm, MPI_COMM_WORLD);
+	MPI_Send(BufferR, chunksize1, MPI_INT, i, 1, MPI_COMM_WORLD);
+	MPI_Send(BufferG, chunksize1, MPI_INT, i, 2, MPI_COMM_WORLD);
+	MPI_Send(BufferB, chunksize1, MPI_INT, i, 3, MPI_COMM_WORLD);
 	//source->R=source->R+chunksize1;
 	//source->G=source->G+chunksize1;
 	//source->B=source->B+chunksize1;
 	//value=value+newOffset;
 	
-	BufferR=BufferR+chunksize1;
+	    BufferR=BufferR+chunksize1;
         BufferG=BufferG+chunksize1;
         BufferB=BufferB+chunksize1;
 
@@ -563,7 +565,7 @@ int main(int argc, char **argv)
 
 
 
-	printf("i am the master and my rank equal %d\n my chunk equal %d\n", rank, chunksize1);
+	// printf("i am the master and my rank equal %d\n my chunk equal %d\n", rank, chunksize1);
 			
 		
 	  printf("ChunkSizeX : %d\n", source->ancho);	
@@ -573,14 +575,14 @@ int main(int argc, char **argv)
 
 	
 		
-        convolve2D(BufferR1, output->R, source->ancho, (newOffset/partitions)+halosize, kern->vkern, kern->kernelX, kern->kernelY);
-        convolve2D(BufferG1, output->G, source->ancho, (newOffset/partitions)+halosize, kern->vkern, kern->kernelX, kern->kernelY);
-        convolve2D(BufferB1, output->B, source->ancho, (newOffset/partitions)+halosize, kern->vkern, kern->kernelX, kern->kernelY);
+        convolve2D(source->R, output->R, source->ancho, (newOffset/partitions)+halosize, kern->vkern, kern->kernelX, kern->kernelY);
+        convolve2D(source->G, output->G, source->ancho, (newOffset/partitions)+halosize, kern->vkern, kern->kernelX, kern->kernelY);
+        convolve2D(source->B, output->B, source->ancho, (newOffset/partitions)+halosize, kern->vkern, kern->kernelX, kern->kernelY);
 
         gettimeofday(&tim, NULL);
         tconv = tconv + (tim.tv_sec+(tim.tv_usec/1000000.0) - start);
 
-         printf("%.6lf seconds elapsed for make the convolution.\n", tconv);
+         printf("proc(%d) : %.6lf seconds elapsed for make the convolution.\n",rank, tconv);
 
 	printf("----------------------------------------------------------\n");
 	
@@ -592,7 +594,6 @@ int main(int argc, char **argv)
         }
         gettimeofday(&tim, NULL);
         tstore = tstore + (tim.tv_sec+(tim.tv_usec/1000000.0) - start);
-
 */
 	
        	 //printf("master took %.6lf seconds elapsed to save this chunk.\n", tstore);
@@ -605,42 +606,37 @@ int main(int argc, char **argv)
 	
 	int endj=nproc;
 
-	 output->R=output->R+chunksize1;
-         output->G=output->G+chunksize1;
-         output->B=output->B+chunksize1;
+	//  output->R=output->R+chunksize1;
+    //      output->G=output->G+chunksize1;
+    //      output->B=output->B+chunksize1;
 	int j=1;
 	
+    printf("Master Receiving output from slaves\n");
 	for (j; j<nproc; j++){
-	MPI_Recv(output->R, chunksize1, MPI_INT, j, tags,  MPI_COMM_WORLD, &status);
-	MPI_Recv(output->G, chunksize1, MPI_INT, j, tags, MPI_COMM_WORLD, &status);
-	MPI_Recv(output->B, chunksize1, MPI_INT, j, tags, MPI_COMM_WORLD, &status);
+        printf("receive from %d\n", j);
+        MPI_Recv(output->R+j*chunksize1, chunksize1, MPI_INT, j, 1,  MPI_COMM_WORLD, &status);
+        MPI_Recv(output->G+j*chunksize1, chunksize1, MPI_INT, j, 2, MPI_COMM_WORLD, &status);
+        MPI_Recv(output->B+j*chunksize1, chunksize1, MPI_INT, j, 3, MPI_COMM_WORLD, &status);
+        printf("Master Receiving output from slaves Done\n");
+        
+        // //printf("cunk received from node %d and start job from %d\n " , j, output->R);
+        // output->R=output->R+chunksize1;
+        // output->G=output->G+chunksize1;
+        // output->B=output->B+chunksize1;
 
-	//Storing resulting image partition.
-//        gettimeofday(&tim, NULL);
-  //      start = tim.tv_sec+(tim.tv_usec/1000000.0);
-    //    if (savingChunk(output, &fpdst, partsize, offset)) {
-      //      perror("Error: ");
-            //        free(source);
-            //        free(output);
-        //    return -1;
-       // }
-        //gettimeofday(&tim, NULL);
-        //tstore = tstore + (tim.tv_sec+(tim.tv_usec/1000000.0) - start);
-	//freeImagestructure(&output);
-	
-	//printf("cunk received from node %d and start job from %d\n " , j, output->R);
-	 output->R=output->R+chunksize1;
-	 output->G=output->G+chunksize1;
-	 output->B=output->B+chunksize1;
-
-	 //printf("master took %.6lf seconds elapsed to save this chunk.\n", tstore);	
-	//printf ("----------------------------------------------------------\n");
+        //printf("master took %.6lf seconds elapsed to save this chunk.\n", tstore);	
+        //printf ("----------------------------------------------------------\n");
 	}// end for
 
 
-			
+	
 	gettimeofday(&tim, NULL);
         start = tim.tv_sec+(tim.tv_usec/1000000.0);
+        printf("partsize : %d\n", partsize);
+        printf("width : %d\n", source->ancho);
+        printf("height : %d\n", source->altura);
+        printf("last element : %d\n", output->R[partsize-1]);
+
         if (savingChunk(output, &fpdst, partsize, offset)) {
             perror("Error: ");
 
@@ -703,9 +699,9 @@ int main(int argc, char **argv)
 
 
 
-	MPI_Recv(output1->R, chunksize1, MPI_INT, 0, tagm, MPI_COMM_WORLD, &status);
-	MPI_Recv(output1->G, chunksize1, MPI_INT, 0, tagm, MPI_COMM_WORLD, &status);
-	MPI_Recv(output1->B, chunksize1, MPI_INT, 0, tagm, MPI_COMM_WORLD, &status);
+	MPI_Recv(output1->R, chunksize1, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
+	MPI_Recv(output1->G, chunksize1, MPI_INT, 0, 2, MPI_COMM_WORLD, &status);
+	MPI_Recv(output1->B, chunksize1, MPI_INT, 0, 3, MPI_COMM_WORLD, &status);
 
         ///////////////////////////////////////////////////////////////
 
@@ -731,9 +727,9 @@ int main(int argc, char **argv)
         //////////////////////////////////////////////////////////////////////////////////////////////////
         
        
-	MPI_Send(output2->R, chunksize1, MPI_INT, 0, tags, MPI_COMM_WORLD);
-	MPI_Send(output2->G, chunksize1, MPI_INT, 0, tags, MPI_COMM_WORLD);
-	MPI_Send(output2->B, chunksize1, MPI_INT, 0, tags, MPI_COMM_WORLD);
+	MPI_Send(output2->R, chunksize1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+	MPI_Send(output2->G, chunksize1, MPI_INT, 0, 2, MPI_COMM_WORLD);
+	MPI_Send(output2->B, chunksize1, MPI_INT, 0, 3, MPI_COMM_WORLD);
     
 
     //fclose(fpsrc);
@@ -744,7 +740,7 @@ int main(int argc, char **argv)
     
     gettimeofday(&tim, NULL);
     tend = tim.tv_sec+(tim.tv_usec/1000000.0);
-    printf("i am worker number %d and my cunk is  %d\n", rank, chunksize1);
+    // printf("i am worker number %d and my cunk is  %d\n", rank, chunksize1);
     //printf("my chunk of pixels equal %d\n", chunksize1);
    // printf("Imatge: %s\n", argv[1]);
     //printf("ISizeX : %d\n", source->ancho);
@@ -755,13 +751,13 @@ int main(int argc, char **argv)
     //printf("%.6lf seconds elapsed for Reading image file.\n", tread);
     //printf("%.6lf seconds elapsed for copying image structure.\n", tcopy);
     //printf("%.6lf seconds elapsed for Reading kernel matrix.\n", treadk);
-    printf("%.6lf seconds elapsed for make the convolution.\n", tconv);
+    printf("proc(%d) : %.6lf seconds elapsed for make the convolution.\n", rank, tconv);
 
-    printf("%.6lf seconds elapsed\n", tend-tstart);
+    printf("proc(%d) : %.6lf seconds elapsed\n", rank, tend-tstart);
     printf("-------------------------------------------------------------\n");
-    //freeImagestructure(&source);
-     freeImagestructure(&output1);
-     freeImagestructure(&output2);
+    // //freeImagestructure(&source);
+    //  freeImagestructure(&output1);
+    //  freeImagestructure(&output2);
     
 
 
@@ -778,4 +774,3 @@ int main(int argc, char **argv)
 	return 0; 
 
 }
-
